@@ -1,0 +1,1078 @@
+---
+title: "Statistical Methods for Data Science - Homework 1"
+author: "Group 11: Adrienn Timea Aszalos, Lorenzo Pannacci, Syed Muhammad Hassan Raza"
+date: "2023-12-01"
+output:
+  html_document:
+    theme: journal
+    toc: yes
+    toc_float:
+      collapsed: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise 1
+
+## Setup
+
+**We, as an "oracle" in this experiment, possess key insights into the setup:**
+
+1.   **Student Population:**
+     - There are $n = 150$ students, of which a certain number $k$ are liars/cheaters (therefore $0 \le k \le 150$)
+
+2.   **Liar Identification Mechanism:** 
+     - To identify cheaters, we utilize coin tosses, where a 'head' indicates success, and a 'tail' indicates failure. Each student will execute a series of throws
+
+3.  **Random Variables for Throws:**
+     - Honest students' throws can be represented by $n - k$ random variables $H_j ∼ Ber(0.5)$
+     - Liars students' throws can be represented by $k$ random variables $L_j ∼ Ber(q)$, where $q \in (0, 1), \, \, q > 0.5$ and it is known by us
+
+**To distinguish honest students from liars we can establish a "strategy", that consist of two parameters:**
+
+-   $\boldsymbol{N}$, the number of throws each student must do as part of the evaluation
+-   The **decision rule**, a way to decide if a student is a liar or not based on the experiment done
+
+**We want to evaluate the performances of a strategy in reaching certain pre-selected target errors:**
+
+-   $\boldsymbol{\alpha} = \text{Pr(False positives)}$: the probability that we claim a student is a liar when it was honest
+-   $\boldsymbol{\beta} = \text{Pr(False negatives)}$: the probability that we claim a student is honest when it was a liar
+
+## Part 1
+
+For each student's \(N\) coin throws, the distribution of heads follows a binomial distribution, therefore:
+
+   - For honest students: \(H \sim \text{Binom}(N, 0.5)\).
+   - For liar students: \(L \sim \text{Binom}(N, q)\).
+
+In particular we want to focus on a certain "family" of decision rules, the rules where **"we declare someone a liar if among those $N$ tosses more than $t$ are heads"** (with $0 \le t \le N$). In this scenario $t$ is a threshold above which we consider a student a liar. Therefore the generic decision rule is:
+
+\[\text{if #heads}_j > t \rightarrow \text{student j is predicted as a liar}
+\]
+
+The motivation for our decision is that this choice grant us the possibility to exploit the properties of a series of throws as a Binomial distribution and for every pair of distributions with different parameter $p$ we can be arbitrary precise with our predictions, given a large enough $N$.
+
+Fixed a certain value for $t$ the estimated errors of our strategy become:
+
+\[
+\begin{align*}
+\alpha &= Pr(\text{You claim the student is a liar | Student is honest}) \\
+&= Pr(H > t) \\
+&= 1 - Pr(H \le t) \\
+&= 1 - F_H(t)
+\end{align*}
+\]
+
+
+and:
+
+\[
+\begin{align*}
+\beta &= Pr(\text{You claim the student is honest | The student is a liar}) \\
+&= Pr(L \le t) \\
+&= F_L(t)
+\end{align*}
+\]
+
+Where $F_H(t)$ and $F_L(t)$ are the CDFs of $H$ and $L$ respectively.
+
+We show an example given $N = 50$, $\, t = 40$ and $q = 0.75$, with a plot of how the two error rates evolve varying the threshold $t$. The curve with blue points is $\alpha$, it starts as $1$ since when the threshold is $0$ we declare every honest student a liar and goes down to $0$ increasing $t$. The curve with red points is $\beta$, it starts as $0$ since with a threshold of $0$ we will catch every liar and increases with $t$. The green line is the selected threshold, its intersection with the two curves tell us the error rates the strategy yields.
+
+```{r Errors curves example 1, echo = FALSE, cache=TRUE}
+
+create_curves_plot <- function(N, t, q){
+  
+  if(is.nan(t)){
+    title <-  capture.output(cat("Errors plot for N = ", N, ", q = ", q, sep = ""))
+  }
+  else{
+    title <-  capture.output(cat("Errors plot for N = ", N, ", t = ", t, ", q = ", q, sep = ""))
+  }
+  
+  # plotting the blue curve
+  curve(1 - pbinom(x, N, 0.5), -.5, N + 0.5, lwd = 2, ylab = "Error rate", xlab = "Threshold", main = title, n = 10001)
+  k <- 0:N
+  cdf <- 1 - pbinom(k, N, 0.5)
+  points(k, cdf, pch = 20, col = "blue")
+  
+  # plotting the red curve
+  curve(pbinom(x, N, q), -.5, N + 0.5, lwd = 2, ylab = "Error rate", xlab = "Threshold", main = title, n = 10001, add = TRUE)
+  k <- 0:N
+  cdf <- pbinom(k, N, q)
+  points(k, cdf, pch = 20, col = "red")
+
+  if(!is.nan(t)){
+    # adding vertical line at t
+    abline(v = t, col = "green", lwd = 2)
+    
+    cat("Estimated alpha for t =", t, ":", 1 - pbinom(t, N, 0.5), "\n",
+        "Estimated beta for t =", t, ":", pbinom(t, N, q)) 
+  }
+
+  legend("bottomleft", legend = c("False positives rate (alpha)", "False negatives rate (beta)"),
+         col = c("blue", "red"), pch = 20, cex = 0.8, y.intersp = 1.5, inset = c(0, 0.4))
+  
+}
+
+
+create_curves_plot(50, 40, 0.75)
+
+```
+
+While the optimal value for optimizing $\alpha$ and $\beta$ together appears to be around $t = 32$ (where the two curves intersect), achieving a balanced optimization between these two values is not necessarily our objective. According to the given target values, at times we may prioritize better performance on one error at the expense of the other.
+
+In general we see that the higher **the number of throws the easier it is to separate the two distributions and the closer $q$ is to $p$ the harder it becomes**. To show it we plot the same graph as before, first changing $N$ to $250$ and then changing $q$ to $0.51$.
+
+```{r Errors curves example 2, echo = FALSE, cache=TRUE}
+
+create_curves_plot(250, NaN, 0.75)
+
+```
+
+```{r Errors curves example 3, echo = FALSE, cache=TRUE}
+
+create_curves_plot(50, NaN, 0.51)
+
+```
+
+The first plot shows that if $q$ has a meaningful difference from $0.5$ with many throws it becomes trivial to separate honest student from liars and we can easily find a threshold that has both $\alpha$ and $\beta$ to almost zero.
+
+The second plot shows that $N = 50$ is too small of a sample to get meaningful results for $q = 0.51$, as the results we get has **almost** no difference in errors performance from choosing at random, given that the intersection between the two curves is around $0.5$ for both. It's however important to point out that even in such extreme cases we can get arbitrarly good performances given a large enough $N$.
+
+Given this setup we aim to define a score function to evaluate the performances of strategies given certain target values for $\alpha$ and $\beta$, that we call $\alpha^*$ and $\beta^*$. We list some key features we want to achieve with our score function:
+
+-   We want a score with **range** $\boldsymbol{[0, 1]}$ to give an immediate idea on the optimality of the chosen strategy. The higher the score the better the chosen strategy is
+-   We want to **treat $\boldsymbol{\alpha}$ and $\boldsymbol{\beta}$ equally**; priority of one over the other should be given only by different target values and not by the structure of the score formula
+-   We want the **score to get increasingly better the closer the proposed strategy is to the requested target errors**
+-   We want to give **no additional value to strategies that overshoot** $\alpha$ and $\beta$, achieving more than requested
+-   We want to **penalize** those strategies that reach the targets using an **excessive number of throws**
+-   We want to give the **max score to the optimal strategy**
+
+It is clear that create such score **we need to know the optimal strategy**. By "optimal strategy" we refer to the combination of $N$ and $t$ that reaches the target values $\alpha^*$ and $\beta^*$ while minimizing $N$.
+
+### The formula
+
+To derive our score formula we start from a simple function and refine it by ensuring it respects the features we previously defined. We start from a function that considers all the parameters of the evaluated strategy: $\alpha$, $\beta$ and $N$. It penalizes higher values of all the three parameters and treats $\alpha$ and $\beta$ equally:
+
+\[
+\frac{1}{\alpha + \beta} \cdot \frac{1}{N + 1}
+\]
+
+To achieve a range between $0$ and $1$ we want to normalize by the parameters of the optimal strategy:
+
+\[
+\frac{\alpha^* + \beta^*}{\alpha + \beta} \cdot \frac{N^* + 1}{N + 1}
+\]
+
+To give no additional value to strategies that overshoot the error rates we limit $\alpha$ and $\beta$ by $\alpha^*$ and $\beta^*$. We  do it by using the function $max()$. In this way the highest value the first part of the scoring function can achieve is $1$.
+
+\[
+\frac{\alpha^* \,+\, \beta^*}{max(\alpha,\, \alpha^*) \,+\, max(\beta,\, \beta^*)} \cdot \frac{N^* + 1}{N + 1}
+\]
+
+Finally we want to do the same to the second part of the function to avoid that a strategy that reaches error values close to the target in less coin throws is evalued more than the optimal strategy, as to give importance to the actual achievement of the target values and not just the reach of a good compromise:
+
+\[
+\frac{\alpha^* \,+\, \beta^*}{max(\alpha,\, \alpha^*) \,+\, max(\beta,\, \beta^*)} \cdot \frac{N^* + 1}{max(N,\, N^*) + 1}
+\]
+
+This is our scoring function, where:
+
+- $\alpha$ and $\beta$ represent the error rates, and $N$ is the number of throws in the evaluated strategy
+- $\alpha^*$ and $\beta^*$ denote the target errors, and $N^*$ is the minimum number of throws required to achieve those targets
+
+The formula can be seen as divided in two parts:
+
+**The first part evaluates the strategy based on performances**, confronting the error rates with the targets. It can only "penalize" and not reward strategies, as the highest value it can achieve is 1, achieved only by those strategies that reach or exceed the target values.
+
+**The second part evaluates the strategy based on the number of throws**, confronting the number of throws with the optimal one. As the first part it can only "penalize", as its highest value is 1, reached only by those strategies that uses same number of throws as the optimal strategy or less.
+
+
+```{r score part 1}
+
+# function to get the optimal N given target errors and q
+
+optimal_N <- function(q, alpha_star, beta_star){
+  # check if constraints are respected
+  if(q <= 0.5){
+    stop("q should be a number greater than 0.5!")
+  }
+  if(alpha_star < 0 | beta_star < 0){
+    stop("Error rates must be positive values!")
+  }
+  if(alpha_star == 0 | beta_star == 0){
+    stop("It would require an infinite amount of throws to get an error rate of zero!")
+  }
+
+  # search optimal N
+  N <- 1
+  while(TRUE){
+    # min number of throws to get desired performance on alpha
+    t_alpha = qbinom(1 - alpha_star, N, 0.5)
+    
+    # max number of throws to get desired performance on beta
+    t_beta = qbinom(beta_star, N, q) - 1
+    
+    if(t_alpha <= t_beta) { # for current N exist a threshold that satisfy both 
+      break
+    }
+    else { # continue the search
+      N <- N + 1
+    }
+  }
+  return(N)
+}
+
+get_score <- function(N, t, alpha_star, beta_star, q){
+  # calculate alpha and beta performances of given strategy
+  alpha <- 1 - pbinom(t, N, 0.5)
+  beta <- pbinom(t, N, q)
+  
+  # get optimal N for target values
+  oN <- optimal_N(q, alpha_star, beta_star)
+  
+  # calculate score of given strategy
+
+  worst_alpha <- max(alpha, alpha_star)
+  worst_beta <- max(beta, beta_star)
+  
+  unnormalized_score = 1 / ((worst_alpha + worst_beta) * (max(N, oN) + 1))
+  optimal_score = 1 / ((alpha_star + beta_star) * (oN + 1))
+  
+  normalized_score = unnormalized_score / optimal_score
+  
+  return(normalized_score)
+}
+
+```
+
+Let's now try with a few examples to check the consistency of the scoring function in different situations.
+
+### Examples
+
+We set as probability of success of the unfair coin $q = 0.75$ and as target values $\alpha^* = 0.1$ and $\beta^* = 0.1$. The optimal strategy to reach our target is $N = 26$ and $t = 16$, as we can see from the following plot:
+
+```{r example 1 plot 1, echo = FALSE, cache=TRUE}
+
+create_curves_plot(26, 16, 0.75)
+
+```
+
+We can also confirm whether this is the optimal strategy or not by checking the plots for lower numbers of throws, as $N = 25$ and $N = 24$:
+
+```{r example 1 plot 2, echo = FALSE, cache=TRUE}
+
+create_curves_plot(25, 15, 0.75)
+
+create_curves_plot(24, 15, 0.75)
+
+```
+
+We can see that even the best threshold among those we can chose in the two scenarios give us at least a value above $0.1$. Let's now check the score for the optimal strategy, $N = 26$ and $t = 16$:
+
+```{r example 1 score 1, echo = FALSE, cache=TRUE}
+
+print_score <- function(N, t, alpha_star, beta_star, q){
+  cat("Score for N =", N, ", t =", t, ", q =", q, ", \u03B1\u22C6 =",
+      alpha_star, "and \u03B2\u22C6 =", beta_star, "is:",
+      get_score(N, t, alpha_star, beta_star, q))
+}
+
+print_score(26, 16, 0.1, 0.1, 0.75)
+
+```
+
+The score obtained it's $1$, as we expected from the optimal strategy. What about $N = 25$ and $t = 15$, the strategy we showed in the second plot? We expect a very high score since it is very close but not as high as the previous one.
+
+```{r example 1 score 2, echo = FALSE, cache=TRUE}
+
+print_score(25, 15, 0.1, 0.1, 0.75)
+
+```
+
+And in the same way we expect a somewhat high score from a strategy that reaches the targets and uses slightly more throws than necessary, as $N = 28$ and $t = 17$:
+
+```{r example 1 plot and score 2.5, echo = FALSE, cache=TRUE}
+
+create_curves_plot(28, 17, 0.75)
+
+print_score(28, 17, 0.1, 0.1, 0.75)
+
+```
+
+We can now try a bad strategy from the perspective of errors achieved, like $N = 26$ and $t = 10$:
+
+```{r example 1 plot and score 3, echo = FALSE, cache=TRUE}
+
+create_curves_plot(26, 10, 0.75)
+
+print_score(26, 10, 0.1, 0.1, 0.75)
+
+```
+
+As expected the score is low. What about a strategy with good error rates but that uses too many throws, like $N = 100$ and $t = 63$?
+
+```{r example 1 plot and score 4, echo = FALSE, cache=TRUE}
+
+create_curves_plot(100, 63, 0.75)
+
+print_score(100, 63, 0.1, 0.1, 0.75)
+
+```
+
+Score is low as desired. Finally let's try with a strategy that uses too few throws but given its $N$ achieve good error rates, like $N = 7$ and $t = 4$:
+
+```{r example 1 plot and score 5, echo = FALSE, cache=TRUE}
+
+create_curves_plot(7, 4, 0.75)
+
+print_score(7, 4, 0.1, 0.1, 0.75)
+
+```
+
+The score is not as low as the previous two, as the behavior of this strategy is good even if not optimal: the distance to the target values is not much compared to the little number of throws executed.
+
+## Part 2
+
+We now change slightly our setup, introducing a time constraint:
+
+1. **Checking 50% of the Class:**
+   - We have $\boldsymbol{T}$ **minutes to check half of the class** ($n/2 = 75$ students)
+
+2. **Coin Flip Cost, Sequentiality and Uniformity:**
+   - Each coin flip has a time cost of 3 seconds
+   - Coin **flips must be done sequentially**: we can't have multiple students throw coins at the same time
+   - As the previous rules hold, we must ensure that every student execute the same number of throws \(N\)
+
+3. **Calculating Flips per Student:**
+   - In \(T\) minutes, a total of \((60 / 3) \times T = 20 \times T\) flips can be performed
+   - Dividing them equally among half of the class yields \(\frac{{20 \times T}}{{75}} = \frac{4}{15} \times T\) flips per student in \(T\) minutes
+   - Given that the number of throws must be an integer, by flooring, it becomes $\lfloor (4 / 15) \times T \rfloor$
+
+We want to tweak the original score function to also consider the new time constraint. We now provide a list of features we want to achieve with our new scoring, in addition to the previous ones:
+
+-   We want to give **very low scores to those strategies that violate the imposed time constraint**. Violating the time constraint should be much heavier than simply using too many throws and should render every strategy that does it very bad. However, giving a score of $0$ to every strategy that violates it would render the score useless as a evaluation metric
+-   If the optimal strategy as previously defined is inside the time constraint it remains the optimal strategy
+-   If the optimal strategy as defined before is beyond the limit imposed by the time constraint we define a **new optimal strategy (we will call it "closest strategy") as the one that manages to be inside the time constraint and is the closest to the target values** $\alpha^*$ and $\beta^*$
+
+To measure the "closeness" of a strategy to the target we use the **L1 distance** (Manhattan distance). It is immediate that when the time constraint block us from reaching the true optimal strategy the "closest strategy" will always have as $N$ the maximum number of throws we can give to each student without breaking the time constraint, as increasing $N$ always increase the potential performances.
+
+This implies that what we have to determine about the closest strategy is only the optimal $t$.
+
+### The formula
+
+Starting from the scoring formula created in Part 1 we want change the first part of the function to **follow the "closest strategy" when the "optimal strategy" is not inside the time constraint**:
+
+\[
+\frac{\alpha^* \,+\, \beta^*}{max(\alpha,\, \alpha^*) \,+\, max(\beta,\, \beta^*)} \rightarrow
+\frac{\alpha^c \,+\, \beta^c}{max(\alpha,\, \alpha^c) \,+\, max(\beta,\, \beta^c)} \,
+\text{when } N^* > c
+\]
+
+We also want to **switch to a more severe penalty score when the evalued strategy is outside the time constraint**, as this is a behavior we want to strongly discourage:
+
+\[
+\frac{N^* \,+\, 1}{max(N,\, N^*) \,+\, 1} \rightarrow
+\frac{1}{N \, - \, c \, + \, 1} \,
+\text{when } N > c
+\]
+
+This evaluation is much more severe than the previous one. The max achievable score if a strategy uses even only 1 more throw per student becomes only $0.5$. Overall the new scoring formula can be written as follows:
+
+
+\[
+  \begin{cases}
+   \frac{\alpha^* \,+\, \beta^*}{max(\alpha,\, \alpha^*) \,+\, max(\beta,\, \beta^*)}
+   \cdot
+   \frac{N^* \,+\, 1}{max(N,\, N^*) \,+\, 1}
+   &\quad\text{if}\,\, N \le c \,\, \text{and} \,\, N^* \le c\\
+   \frac{\alpha^c \,+\, \beta^c}{max(\alpha,\, \alpha^c) \,+\, max(\beta,\, \beta^c)}
+   \cdot
+   \frac{N^c \,+\, 1}{max(N,\, N^c) \,+\, 1}
+   &\quad\text{if}\,\, N \le c \,\, \text{and} \,\, N^* > c\\
+   \frac{\alpha^* \,+\, \beta^*}{max(\alpha,\, \alpha^*) \,+\, max(\beta,\, \beta^*)}
+   \cdot
+   \frac{1}{N \, - \, c\, + \, 1}
+   &\quad\text{if}\,\, N > c \,\, \text{and} \,\, N^* \le c\\
+   \frac{\alpha^c \,+\, \beta^c}{max(\alpha,\, \alpha^c) \,+\, max(\beta,\, \beta^c)}
+   \cdot
+   \frac{1}{N \, - \, c \, + \, 1}
+   &\quad\text{if}\,\, N > c \,\, \text{and} \,\, N^* > c\\
+  \end{cases}
+\]
+
+Where:
+
+- \(c\) represents the constraint on the number of throws imposed by the time limit
+- \(\alpha^*\), \(\beta^*\), and \(N^*\) represent the optimal strategy
+- \(\alpha^c\), \(\beta^c\), and \(N^c\) represent the closest strategy
+- \(\alpha\), \(\beta\), and \(N\) represent the evaluated strategy
+
+For what we said before when we need to use $N^c$ it is always true that $N^c = c$. When both the proposed $N$ and the optimal strategy are inside the time constraint, the formula remains the same as seen in Part 1.
+
+As for the previous one, this score function is divided into two parts: the first one evaluates the performances and the second one evaluates the number of throws.
+
+```{r score part 2}
+
+# function that calculates the performances of the "closest" optimal strategy
+closest_optimal <- function(N, alpha_star, beta_star, q){
+  best_distance <- Inf
+  best_values <- NaN
+  for(t in 0:N){
+    # calculate alpha and beta performances of current hypothesis
+    alpha <- 1 - pbinom(t, N, 0.5)
+    beta <- pbinom(t, N, q)
+    current <- c(alpha, beta)
+    target <- c(alpha_star, beta_star)
+    
+    # calculate closeness to target
+    distance <- sum(abs(current - target))
+    
+    # if better than best substitute
+    if(distance < best_distance){
+      best_distance <- distance
+      best_values <- current
+    }
+  }
+  
+  return(best_values)
+}
+
+# function that calculate the new score value considering the time constraint
+get_score_with_time_constraint <- function(N, t, alpha_star, beta_star, q, Time){
+  # get optimal N for target values
+  oN <- optimal_N(q, alpha_star, beta_star)
+  
+  # max number of throws each student can do without violating the time constraint
+  constraint <- floor((Time * 60) / (3 * 75))
+
+  # calculate alpha and beta performances of given strategy
+  alpha <- 1 - pbinom(t, N, 0.5)
+  beta <- pbinom(t, N, q)
+  
+  if(oN <= constraint){ # if inside constraint use old score for performance
+    worst_alpha <- max(alpha, alpha_star)
+    worst_beta <- max(beta, beta_star)
+
+    unnormalized_performance_score = 1 / (worst_alpha + worst_beta)
+    optimal_performance_score = 1 / (alpha_star + beta_star)
+    
+    performance_score <- unnormalized_performance_score / optimal_performance_score
+  }
+  else{ # calculate new target values of optimal strategy inside constraints
+    oN <- constraint
+
+    optimal <- closest_optimal(constraint, alpha_star, beta_star, q)
+    alpha_optimal <- optimal[1]
+    beta_optimal <- optimal[2]
+    
+    worst_alpha <- max(alpha, alpha_optimal)
+    worst_beta <- max(beta, beta_optimal)
+    
+    unnormalized_performance_score = 1 / (worst_alpha + worst_beta)
+    optimal_performance_score = 1 / (alpha_optimal + beta_optimal)
+    
+    performance_score = unnormalized_performance_score / optimal_performance_score
+  }
+  
+  # we now calculate score for number of throws
+  
+  if(N <= constraint){ # if inside constraint use old score for throws
+
+    unnormalized_throws_score = 1 / (max(N, oN) + 1)
+    optimal_throws_score = 1 / (oN + 1)
+    
+    throws_score <- unnormalized_throws_score / optimal_throws_score
+  }
+  else{ # if outside constraint give heavy penalty based on distance from constraint
+    throws_score <- 1 / (N - constraint + 1)
+  }
+  
+  total_score <- performance_score * throws_score
+  
+  return(total_score)
+}
+
+
+```
+
+Let's now see some examples with the new score function in different situations:
+
+### Examples
+
+We can try to use the first of the previous examples, the one where $q = 0.75$, $\alpha^* = 0.1$, $\beta^* = 0.1$, $N = 26$ and $t = 16$ using a constraint large enough to make the old optimal strategy inside the constraint, for example $Time = 120$ minutes.
+
+```{r example 2 plot and score 1, echo = FALSE, cache=TRUE}
+
+create_curves_plot_with_constraint <- function(N, t, q, Time){
+  
+  title <-  capture.output(cat("Errors plot for N = ", N, ", t = ", t, ", q = ", q, " Time = ", Time, sep = ""))
+  
+  # plotting the blue curve
+  curve(1 - pbinom(x, N, 0.5), -.5, N + 0.5, lwd = 2, ylab = "Error rate", xlab = "Threshold", main = title, n = 10001)
+  k <- 0:N
+  cdf <- 1 - pbinom(k, N, 0.5)
+  points(k, cdf, pch = 20, col = "blue")
+  
+  # plotting the red curve
+  curve(pbinom(x, N, q), -.5, N + 0.5, lwd = 2, ylab = "Error rate", xlab = "Threshold", main = title, n = 10001, add = TRUE)
+  k <- 0:N
+  cdf <- pbinom(k, N, q)
+  points(k, cdf, pch = 20, col = "red")
+  
+  # insert time constraint
+  
+  constraint <- floor((4/15) * Time)
+  
+  # Define the x and y coordinates for the area you want to color
+  if(N > constraint){
+    # x-coordinates for the area
+    x_area <- c(constraint, max(constraint, N), max(constraint, N), constraint)
+    
+    # y-coordinates for the area
+    y_area <- c(0, 0, 1, 1)
+    
+    # color the area using the polygon function
+    polygon(x_area, y_area, col = rgb(169, 169, 169, alpha = 100, maxColorValue = 255))
+  }
+  
+
+  # Adding legend outside the plot
+  legend("bottomleft", legend = c("False positives rate (alpha)", "False negatives rate (beta)"),
+         col = c("blue", "red"), pch = 20, cex = 0.8, y.intersp = 1.5, inset = c(0, 0.4))
+  
+  if(!is.nan(t)){
+    # adding vertical line at t
+    abline(v = t, col = "green", lwd = 2)
+    
+    cat("Estimated alpha for t =", t, ":", 1 - pbinom(t, N, 0.5), "\n",
+        "Estimated beta for t =", t, ":", pbinom(t, N, q)) 
+  }
+  
+}
+
+print_score_with_constraint <- function(N, t, alpha_star, beta_star, q, Time){
+  cat("Score for N =", N, ", t =", t, ", q =", q, ", \u03B1\u22C6 =",
+      alpha_star, ", \u03B2\u22C6 =", beta_star, "and Time =", Time, "is:",
+      get_score_with_time_constraint(N, t, alpha_star, beta_star, q, Time))
+}
+
+create_curves_plot_with_constraint(26, 16, 0.75, 120)
+
+print_score_with_constraint(26, 16, 0.1, 0.1, 0.75, 120)
+
+```
+
+The result is the same as before and since it's $1$ we can say it's still the go-to strategy. We now try to insert a strict time constraint, for example $Time = 30$ minutes:
+
+```{r example 2 plot and score 2, echo = FALSE, cache=TRUE}
+create_curves_plot_with_constraint(26, 16, 0.75, 30)
+
+print_score_with_constraint(26, 16, 0.1, 0.1, 0.75, 30)
+
+```
+
+We are deeply violating our time constraint and the score reflects it, it's very low even if $\alpha$ and $\beta$ are satisfying the requests. Now we try with something that does not arrive at the target but it's the closest we can get, $N = 8$ and $t = 5$:
+
+```{r example 2 plot and score 3, echo = FALSE, cache=TRUE}
+create_curves_plot_with_constraint(8, 5, 0.75, 30)
+
+print_score_with_constraint(8, 5, 0.1, 0.1, 0.75, 30)
+
+```
+
+The score define this strategy as optimal, but is it really the best we can achieve? What about $N = 7$ and $t = 4$?
+
+```{r example 2 plot and score 4, echo = FALSE, cache=TRUE}
+create_curves_plot_with_constraint(7, 4, 0.75, 30)
+
+print_score_with_constraint(7, 4, 0.1, 0.1, 0.75, 30)
+
+```
+
+This strategy has a very high score too and overall it's more balanced, but its considered lower than the previous, it's not our chosen "closest strategy". That is because its Manhattan distance from the target is slightly higher:
+
+$\text{Distance 1:} \, |0.1445312 - 0.1| + |0.3214569 - 0.1| = 0.2659881$
+$\text{Distance 2:} \, |0.2265625 - 0.1| + |0.2435913 - 0.1| = 0.2701538$
+
+### Analysis for T = 15
+
+We now analyze the case where $T = 15$ minutes. The number of throws we can give to each student in such time is $\lfloor (4 / 15) \times 15 \rfloor = 4$. Since the number of possible throws is very low what we can achieve will be very limited even for a large $q$. Let's plot the distribution of the errors for $q = 0.75$:
+
+```{r analysis 1, echo = FALSE, cache=TRUE}
+
+create_curves_plot(4, 2, 0.75)
+
+```
+
+As we can see **for $q = 0.75$ even the best strategy for a balanced result can't go below $0.25$ for $\alpha$ or $\beta$**. To achieve high performance one type of error we are forced to greatly worsen the performance of the other:
+
+```{r analysis 2, echo = FALSE, cache=TRUE}
+
+create_curves_plot(4, 1, 0.75)
+
+```
+
+**A small $N$ give us also a very limited range of choices**: if we want a $\beta$ that goes below $0.25$ we are forced to take a strategy that give us a $\beta$ of around $0.05$ instead, greatly worsening the value of $\alpha$ we can achieve while reaching our objective. If we use lower values of $q$ it becomes even harder to achieve meaningful results. We show $q = 0.6$:
+
+```{r analysis 3, echo = FALSE, cache=TRUE}
+
+create_curves_plot(4, 2, 0.60)
+
+```
+
+**In the case where $q = 0.6$ one error will always be worse than chance**, even if we try to optimize them both. Finally, **if we want to achieve both $\alpha$ and $\beta$ below $0.1$ we have to ramp up $q$ to around $0.975$**.
+
+```{r analysis 4, echo = FALSE, cache=TRUE}
+
+create_curves_plot(4, 3, 0.975)
+
+```
+
+# Exercise 2
+
+## Setup
+
+What we know about the exercise setup:
+
+-   There is a **true population model** $X \sim Beta(\alpha, \beta)$, we call its CDF $F_X(\cdot)$, its density function $f(\cdot)$ and its quantile function $F^{-1}(\cdot)$. We can choose and study different values of $\alpha$ and $\beta$
+-   Our objective is to create an approximation $\widehat{f}_h(\cdot)$ to the density $f(\cdot)$ using a **Kernel Density Estimator and having the bandwidth $h$ as the only parameter we can tune**. Other parameters as the type of kernel will be fixed
+-   We are working under a **perfect information** assumption, this means that we can "query" the True Model, therefore the number of samples is arbitrary and we can explore how our results vary with different number of samples
+-   We want do determine the highest bandwidth $h$ that achieves a 1-Wasserstein distance lesser or equal to a certain $\epsilon$ and study how $h$ must vary with $\epsilon$
+
+## Wasserstein Distance
+
+
+
+A p-Wasserstein distance is a distance metric between probability functions. We are interested in a simple case of this distance, where $p = 1$, the distributions are univariate ($m = 1$) and the ground distance is the absolute distance ($d = L1$). Intuitively it can be seen as the amount of "work" needed to transform one distribution into another, in our case the estimated distribution into the original one. The metric obtained under those conditions is:
+
+\[
+W_{L1,\,1}(\mathcal{P}_X,\mathcal{P}_Y) =
+\int_{0}^{1} | \, F_X^{-1}(z) - F_Y^{-1}(z) \, | \, dz
+\]
+
+Where $\mathcal{P}_X$ and $\mathcal{P}_Y$ are two distributions and $F_X^{-1}(\cdot)$ and $F_Y^{-1}(\cdot)$ are their quantile functions.
+
+```{r wasserstein, warning=FALSE}
+library(transport)  # the 'transport' package contains a function for Wasserstein distance calculation
+
+compute_wasserstein_p1 <- function(true_quantile, approx_quantile){
+  # we set p = 1 as we will only need this
+  wasserstein_dist <- wasserstein1d(true_quantile, approx_quantile, p = 1)
+  
+  return(wasserstein_dist)
+}
+
+```
+
+We will use this distance to evaluate how close our estimated density $\widehat{f}_h(\cdot)$ is to the target $f(\cdot)$. This function will have as input the two quantile functions to confront, while the parameter $p$ will be set to $1$.
+
+## Kernel Density Estimation
+
+The Kernel Density Estimation (KDE) is a function used to obtain smooth estimations of the density of a distribution from data samples of the distribution itself. Considering the case where $d = 1$ as the one we are working on we can write this function as:
+
+\[
+\widehat{f}_h(x) = \frac{1}{n} \sum_{i=1}^{n} \frac{1}{h} K\left(\frac{1}{h} (x - X_i)\right)
+\]
+
+Where:
+
+-   $X_1, \,...,\, X_n$ are the **data samples**
+-   $K$ is the **smoothing kernel**, a function that possesses certain properties. Usually the choice of the kernel does not change significantly the estimation. In our setup we decided to use the "rectangular" kernel
+-   $h$ is the **bandwidth**. We can consider it a "smoothing parameter" as the higher $h$ is the smoother the estimation becomes. This is the most critical factor in the estimation: a low bandwidth will cause undersmoothing, resulting in an curve that is likely to capture noise. On the other hand a high bandwidth will cause oversmoothing, resulting in the loss of finer details. Its range is $(0,1]$
+
+We use the R function $\text{density}(\cdot)$ to compute the Kernel Density Estimation. As a Beta distribution has its support in the range $[0, 1]$ and the KDE only approximates a Beta distribution we have to crop out the support outside this range. After this we will have to normalize, to divide by the integral of the distribution over $[0, 1]$ to obtain a "legit" distribution function.
+
+```{r kernel density estimation, warning=FALSE}
+
+kernel_density_estimation <- function(data, bandwidth){
+  # Compute KDE using density() function
+  # parameters are rectangular kernel and the specified bandwidth
+  density_estimation <- density(data, bw = bandwidth, kernel = "rectangular")
+  
+  # we have to remove values outside of the support
+  # wrong values are those with x < 0 or x > 1
+  mask <- density_estimation$x >= 0 & density_estimation$x <= 1
+  density_estimation$x <- density_estimation$x[mask]
+  density_estimation$y <- density_estimation$y[mask]
+
+  # finally we have to normalize
+  # so that the integral over support will be 1 again
+  total_area <- sum(diff(density_estimation$x) * density_estimation$y)
+  density_estimation$y <- density_estimation$y / total_area
+  
+  return(density_estimation)
+}
+
+```
+
+We now plot the Beta distribution for $\alpha = 2$ and $\beta = 5$, the histogram obtained with $1000$ samples of the same distribution and the estimated density curve we get using the previously defined function on those samples.
+
+```{r kde example, warning=FALSE, echo = FALSE, out.height=1200, out.width=800, fig.width = 5, fig.height = 8, cache=TRUE}
+
+# we will create 3 plots
+par(mfrow = c(3, 1))
+
+# beta distribution parameters
+alpha <- 2
+beta <- 5
+
+# sampling parameters
+n_samples <- 1000
+set.seed(123) # se set a seed for repeatability
+
+# plot of beta distribution curve
+x <- seq(0, 1, by = 0.01)
+beta_density <- dbeta(x, alpha, beta)
+
+plot(x, beta_density, type = "l", col = "blue", lwd = 2.5,
+     xlab = "X", ylab = "Density",
+     main = "Real Beta Distribution Curve")
+
+# create samples from the beta distribution
+data <- rbeta(n_samples, alpha, beta)
+
+# plot the histogram of the generated samples
+hist(data, breaks = 100, col = "skyblue",
+     xlab = "X", ylab = "Frequency",
+     main = "Histogram of Beta Distribution Samples")
+
+density_estimation <- kernel_density_estimation(data, 0.1)
+
+# plot of estimation
+plot(density_estimation, type = "l", col = "red", lwd = 2.5,
+     xlab = "X", ylab = "Density",
+     main = "Estimated Beta Distribution Curve")
+
+```
+
+From the estimated density $\widehat{f}_h(\cdot)$ we have now to obtain the estimated CDF $\widehat{F}_h(\cdot)$ and invert it to get the estimated quantile function $\widehat{F}_h^{-1}(\cdot)$.
+
+```{r quantile estimation, warning=FALSE}
+
+get_quantile_estimation <- function(data, bandwidth){
+  # compute the density estimation using the previously defined function
+  density_estimation <- kernel_density_estimation(data, bandwidth)
+  
+  # calculate the cumulative sum of density estimation to obtain the CDF
+  cdf_estimation <- cumsum(density_estimation$y) * diff(density_estimation$x)[1]
+  
+  # compute the quantile function by interpolating the inverse of the CDF
+  approx_quantile_function <- approxfun(cdf_estimation, density_estimation$x,
+                                        method = "linear", rule = 2)
+  
+  # generate quantile from the approximated quantile function
+  x <- seq(0, 1, length.out = length(density_estimation$x))
+  y <- approx_quantile_function(x)
+  
+  quantile_estimation <- list(x = x, y = y)
+  
+  return(quantile_estimation)
+}
+
+```
+
+As before we want to check with an example if we are correct. We use the same parameters for the Beta distribution and the same number of samples.
+
+```{r quantile estimation example, warning=FALSE, echo = FALSE, out.height=1000, out.width=600, fig.width = 5, fig.height = 8, cache=TRUE}
+
+# we will create 2 plots
+par(mfrow = c(2, 1))
+
+# beta distribution parameters
+alpha <- 2
+beta <- 5
+
+# sampling parameters
+n_samples <- 1000
+set.seed(123) # se set a seed for repeatability
+
+# create samples from the beta distribution
+data <- rbeta(n_samples, alpha, beta)
+
+# get of estimation of quantile function
+quantile_estimation <- get_quantile_estimation(data, bandwidth = 0.1)
+
+# plot of beta quantile curve
+x <- seq(0, 1, length.out = length(quantile_estimation$x))
+real_quantile <- qbeta(x, alpha, beta)
+
+plot(x, real_quantile, type = "l", col = "blue", lwd = 2.5,
+     xlab = "Probability", ylab = "Quantile",
+     main = "Quantile Function of Real Beta Distribution")
+
+# plot of estimation quantile curve
+plot(quantile_estimation, type = "l", col = "red", lwd = 2.5,
+     xlab = "Probability", ylab = "Quantile",
+     main = "Estimated Quantile Function")
+
+```
+
+Having the quantile functions we can now calculate the Wasserstein distance between the original and the estimated distribution:
+
+```{r wasserstein example, warning=FALSE, echo = FALSE, cache=TRUE}
+
+cat("The Wasserstein distance between the functions we used in the examples is: ", compute_wasserstein_p1(real_quantile, quantile_estimation$y))
+
+
+```
+
+A low p-Wasserstein distance indicates that the two distributions are similar to each other, while a higher distance implies greater divergence between the distributions. In our case, the obtained result suggests a relatively small difference between the original and estimated distributions.
+
+## Other useful functions
+
+We need a few other functions to finish up our "experiment environment". Firstly, we need a function to calculate the Wasserstein distance between the real quantile function and the estimation, given certain $\alpha$ and $\beta$ parameters for the Beta distribution, a number of samples $n$ and a bandwidth $h$.
+
+```{r experiment function, warning=FALSE}
+
+experiment <- function(alpha, beta, n, h){
+  
+  # create data from real parameters
+  data <- rbeta(n, alpha, beta)
+  
+  # get estimated quantile function
+  quantile_estimation <- get_quantile_estimation(data, bandwidth = h)
+  
+  # get real quantile function
+  x <- seq(0, 1, length.out = length(quantile_estimation$x))
+  real_quantile <- qbeta(x, alpha, beta)
+  
+  # compute distance
+  distance <- compute_wasserstein_p1(real_quantile, quantile_estimation$y)
+
+  return(distance)
+}
+
+```
+
+Finally, we have to create a function that executes multiple experiments and find the largest $h$ such that the 1-Wasserstein distance is less or equal to a certain $\epsilon$. Since the parameter $h$ can be any real number in the range $(0, 1]$ we have to define a $\text{step_size}$, the difference between an evaluated $h$ and the next. The lower the step size the higher the number of experiments we have to perform, slowing down the execution. Beside the step size and the $\epsilon$ this function will also need all the parameters that define the experiment created above.
+
+We will also want to show how $h$ varies with $\epsilon$, for this purpose it could be useful a plot of the obtained Wasserstein distances at every step of $h$.
+
+
+```{r find and plot h, warning=FALSE}
+
+find_and_plot_h <- function(alpha, beta, n, epsilon, step_size, plot = F, title, legend_value){
+  
+  # initializing variable largest_h as there could be no h such that
+  # satisfy the condition on the distance
+  largest_h <- NaN
+  
+  # get all values of h
+  x <- seq(1, 0, -step_size)
+  x <- x[-length(x)] # remove 0
+  
+  # initializing an empty vector y to store the distances
+  y <- c()
+  
+  # loop iterating over each value of h in the sequence x
+  for(h in x){
+    
+    # calling experiment function with parameters
+    distance <- experiment(alpha, beta, n, h)
+    
+    # appending the distance value to vector y
+    y <- c(y, distance)
+    
+    # updating largest_h with the current value of h
+    # this will only happen once
+    if(is.nan(largest_h) & (distance <= epsilon)){
+      largest_h <- h
+    }
+  }
+  
+  # plotting x and y as a line graph
+  if(plot){
+    plot(x, y, type = "l", col = "blue", lwd = 2.5,
+              xlab = "Bandwidth", ylab = "Wasserstein distance", main = title)
+    
+    legend("bottomright", legend = legend_value, cex=0.8)
+    
+    # adding a horizontal line to the plot at epsilon value if epsilon is
+    # a parameter of the function
+    if(!is.nan(epsilon)){
+      abline(h = epsilon, col = "green", lty = 2, lwd = 2) 
+    }
+  }
+  
+  # returning the value of largest_h after function execution
+  return(largest_h)
+}
+
+```
+
+We test those new functions using as experiment parameters those defined for the previous examples, $\epsilon = 0.1$ and $\text{step_size} = 0.01$:
+
+```{r find and plot h example, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+show_h <- function(alpha, beta, n, epsilon, step_size, plot = F, title, legend){
+  set.seed(123) # se set a seed for repeatability
+  h <- find_and_plot_h(alpha, beta, n, epsilon, step_size, plot, title, legend)
+  
+  if(is.nan(h)){
+    print("No h such that satisfy the imposed condition on epsilon has been found")
+  }
+  else{
+    cat("The largest h such that satisfy the imposed condition on epsilon is: ", h)
+  }
+  
+}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 5, 1000, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth", c("α = 2", "β = 5","n = 1000", "ϵ = 0.1", "step_size = 0.01"))
+```
+
+The curve is wavy but its general trend is clear. It can be observed that higher bandwidths lead to higher Wasserstein distances and that after $h = 0.5$ it stabilizes at around $\text{distance} = 0.2$. Why does it stabilize? Let's plot the estimated quantile function for two bandwidth values in that area, let's say $0.6$ and $0.8$.
+
+```{r quantile for high bandwidth, warning=FALSE, echo = FALSE, out.height=1000, out.width=600, fig.width = 5, fig.height = 8, cache=TRUE}
+
+# we will create 2 plots
+par(mfrow = c(2, 1))
+
+# beta distribution parameters
+alpha <- 2
+beta <- 5
+
+# sampling parameters
+n_samples <- 1000
+set.seed(123) # se set a seed for repeatability
+
+# create samples from the beta distribution
+data <- rbeta(n_samples, alpha, beta)
+
+# get of estimation of quantile function
+quantile_estimation <- get_quantile_estimation(data, bandwidth = 0.6)
+
+# plot of estimation quantile curve
+plot(quantile_estimation, type = "l", col = "red", lwd = 2.5,
+     xlab = "Probability", ylab = "Quantile",
+     main = "Estimated Quantile Function, h = 0.6")
+
+quantile_estimation <- get_quantile_estimation(data, bandwidth = 0.8)
+
+# plot of estimation quantile curve
+plot(quantile_estimation, type = "l", col = "red", lwd = 2.5,
+     xlab = "Probability", ylab = "Quantile",
+     main = "Estimated Quantile Function, h = 0.8")
+
+```
+
+These quantile curves are straight with a 45-degree inclination; we ignore the slight inaccuracies near $0$ and $1$ as those are caused by the conversion of the KDE to a legit density and are not meaningful. This shape for the quantile functions means that the estimated density is constant, this is the expected effect that oversmoothing causes when using a rectangular kernel.
+
+## Parameter choices
+
+### Number of samples
+
+The number of samples to use in the analysis it's not defined, therefore we want to study how it influences the results. Using as baseline the previous examples (where $n = 1000$) we want to increase and decrease the number of samples and see how both the results and the shape of the distance/bandwidth curve change.
+
+Reducing the number of samples first to $100$ and then to $10$ we get:
+
+```{r n sample analysis 1, warning=FALSE, echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 5, 100, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \nNumber of samples = 100", c("α = 2", "β = 5","n = 100", "ϵ = 0.1", "step_size = 0.01"))
+
+show_h(2, 5, 10, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \nNumber of samples = 10", c("α = 2", "β = 5","n = 10", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+The curve greatly changes for low bandwidths and remains almost the same in the latter part, where as we have seen before that the distance seems to stabilize. That is caused by the fact that an estimation produced by a low number of samples is more susceptible to noise and as explained in the "Kernel Density Estimation" chapter of this report undersmoothing, that is caused by low bandwidth, can lead to an estimate that model noise in the density curve.
+
+We can therefore predict that, as increasing the number of samples will reduce the noise, plots with an higher $n$ will have a minor variance for a low bandwidth. To show that we increase the number of samples first to $10000$ and then to $100000$:
+
+```{r n sample analysis 2, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 5, 10000, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \nNumber of samples = 10000", c("α = 2", "β = 5","n = 10000", "ϵ = 0.1", "step_size = 0.01"))
+
+show_h(2, 5, 100000, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \nNumber of samples = 100000", c("α = 2", "β = 5","n = 100000", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+While what we expected is confirmed, we can also observe other two interesting facts:
+
+-   **Increasing the number of samples seems to also have an effect on the lowest distance reached**, as the plot we get for $n = 10$ starts centered around 0.05 and increasing $n$ this value seems to get closer and closer to $0$
+-   **No matter how many samples we use the behavior for high bandwidths seems to remain unchanged**, both in variance and in the value of Wasserstein distance it stabilizes in
+
+While the instability observed with a number of samples is not desired studying those cases may still be relevant as often in real cases we may find ourselves working with very limited amounts of data.
+
+### Number of steps
+
+From the number of steps depend the number of points in range $(0, 1]$ we test as possible $h$ values. The greater the granularity the more precise we can be with our estimate of the largest bandwidth for which the 1-Wasserstein distance is lesser or equal to $\epsilon$.
+
+The number of steps we used previously was $100$ ($\text{step_size} = 0.01$), we now show how the distance/bandwidth curve changes if we set the step size accordingly to get $10$ or $1000$ values of $h$:
+
+```{r n step analysis 1, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 5, 1000, 0.1, 0.1, T, "Wasserstein Distance vs Bandwidth \nStep size = 0.1", c("α = 2", "β = 5","n = 1000", "ϵ = 0.1", "step_size = 0.1"))
+
+show_h(2, 5, 1000, 0.1, 0.001, T, "Wasserstein Distance vs Bandwidth \nStep size = 0.001", c("α = 2", "β = 5","n = 1000", "ϵ = 0.1", "step_size = 0.001"))
+```
+
+For $10$ values we got $0.2$ as the best $h$ value for $100$ it was $0.25$ and for $1000$ it was $0.261$. We would have expected to see the latter one in the range between $0.250$ and $0.259$; this behavior can be attributed to the wavy nature of the curve.
+
+We want to choose a good compromise, as if the number of steps is low the real variability of the data is hidden and a very high number of steps may render the curve difficult to read and increase the computational cost of the execution.
+
+## Analysis
+
+The requested analysis consist in the choice of two different pairs of parameters $\alpha$ and $\beta$ for the Beta distribution and to study and compare the obtained results. Since we already used $\alpha = 2$ and $\beta = 5$ during the setup of the environment we select two different Beta distributions to focus on in this section:
+
+-   $X_1 \sim Beta(\alpha = 5, \beta = 1)$
+-   $X_2 \sim Beta(\alpha = 2, \beta = 2)$
+
+As others parameters we use $n = 1000$, $\text{step_size} = 0.01$ and $\epsilon = 0.1$. The distance/bandwidth curve give us useful insights on how $h$ varies with $\epsilon$ as given a certain distance the corresponding bandwidth (if it exist) is the $h$ such that the distance is less or equal than $\epsilon$.
+
+Let's see the behavior for the first distribution:
+
+```{r ex 2 analysis 2, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(5, 1, 1000, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \n α = 5 and β = 1", c("n = 1000", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+Confronting it to the curve we got for the Beta distribution used in the examples the shape is similar, as it steadily increase (ignoring the small bumps) until a certain bandwidth and then stabilizes, in this case it is around $\text{distance} = 0.33$. This also means that the highest $h$ to satisfy the same condition we imposed before ($\epsilon = 0.1$) is lower, $h = 0.18$.
+
+Now let's the the behavior for the second distribution:
+
+```{r ex 2 analysis 3, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 2, 1000, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \n α = 2 and β = 2", c("n = 1000", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+This curve also resemble the same shape of the others but the scale is much lower, as the distance it seems to stabilize is around $0.06$. This curve seems to have a higher variance, but that's only a visual effect given by the smaller scale of the plot. Since the highest Wasserstein distance we can achieve varying the bandwidth is $0.06$ every $h$ satisfy the condition imposed by $\epsilon$, we can therefore say that the highest bandwidth such that the distance is less or equal than $\epsilon$ is $h = 1$.
+
+Let's see what happens decreasing the number of samples to $n = 100$:
+
+```{r ex 2 analysis 4, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 2, 100, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \n α = 2 and β = 2, n = 100", c("n = 100", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+As we have seen before the variance for low bandwidth increases and the value around which it oscillates increases, while for high bandwidth the behavior remains the same. If we decrease it to $n = 10$:
+
+
+```{r ex 2 analysis 5, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(2, 2, 10, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \n α = 2 and β = 2, n = 10", c("n = 10", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+The variance become so big that it surpasses the distance value of the high bandwidth region, also the mean value of the distance for low bandwidth increases even more than before, reaching about $0.4$. The same thing doesn't happen for $X_1$:
+
+```{r ex 2 analysis 6, warning=FALSE,  echo = FALSE, cache=TRUE}
+
+set.seed(123) # set seed for repeatability
+show_h(5, 1, 10, 0.1, 0.01, T, "Wasserstein Distance vs Bandwidth \n α = 5 and β = 1, n = 10", c("n = 10", "ϵ = 0.1", "step_size = 0.01"))
+
+```
+
+The variance for low bandwidth increases and oscillations seems to be even greater than those observed for $X_2$, but they doesn't surpass the distance value for high bandwidth, we can therefore say that they are proportionately smaller. The conclusion of this observation is that $X_2$ seems to have an higher sensibility to noise than $X_1$.
