@@ -1,4 +1,4 @@
-# SDS-HW1
+# SMDS1-HW1
 
 This is the first homework for the course "Statistical Methods for Data Science and Laboratory" (Part 1), MSc Data Science, Sapienza Università di Roma 2023-24.
 
